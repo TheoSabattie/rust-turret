@@ -2031,6 +2031,7 @@ version = "0.1.0"
 dependencies = [
  "ggez",
  "glam",
+ "rand 0.8.4",
 ]
 
 [[package]]
