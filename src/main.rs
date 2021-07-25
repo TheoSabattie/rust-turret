@@ -51,7 +51,7 @@ fn main() {
     // Create an instance of your event handler.
     // Usually, you should provide it with the Context object to
     // use when setting your game up.
-    let my_game = MyGame::new(&mut ctx);
+    let my_game = Game::new(&mut ctx);
 
     // Run!
     event::run(ctx, event_loop, my_game);
@@ -63,10 +63,65 @@ struct Mobile {
     velocity:Vec2,
 }
 
+#[derive(Clone)]
+struct Enemy {
+    transform:Transform,
+    velocity:Vec2,
+}
+
 impl Mobile {
     fn do_action(&mut self){
-        self.transform.position += self.velocity;
+        move_with_velocity(&mut self.transform.position, &self.velocity);
     }
+}
+
+impl Graphic for Enemy {
+    fn get_transform(&self) -> &Transform {
+        &self.transform
+    }
+}
+
+impl Default for Enemy {
+    fn default() -> Self {
+        Self {
+            velocity:Vec2::default(),
+            transform:Transform::default(),
+        }
+    }
+}
+
+impl Enemy {
+    fn do_action(&mut self, size:&Vec2){
+        move_with_velocity(&mut self.transform.position, &self.velocity);
+
+        let position = &self.transform.position;
+        let mut velocity_changed = false;
+
+        if position.x > size.x {
+            self.velocity.x = -self.velocity.x.abs();
+            velocity_changed = true;
+        } else if position.x < 0.0 {
+            self.velocity.x = self.velocity.x.abs();
+            velocity_changed = true;
+        }
+
+        if position.y > size.y {
+            self.velocity.y = -self.velocity.y.abs();
+            velocity_changed = true;
+        } else if position.y < 0.0 {
+            self.velocity.y = self.velocity.y.abs();
+            velocity_changed = true;
+        }
+
+        if velocity_changed {
+            self.transform.rotation = self.velocity.y.atan2(self.velocity.x);
+        }
+    }
+}
+
+fn move_with_velocity(position:&mut Vec2, velocity:&Vec2){
+    position.x += velocity.x;
+    position.y += velocity.y;
 }
 
 impl Default for Mobile {
@@ -125,21 +180,22 @@ impl Player {
 
 const N_ENEMY:usize = 50;
 
-struct MyGame{
+struct Game{
     player:Player,
     shots:Vec<Mobile>,
-    enemies:Vec<Mobile>,
-    resources:Resources
+    enemies:Vec<Enemy>,
+    resources:Resources,
+    size:Vec2,
 }
 
-impl MyGame {
+impl Game {
     pub fn new(_ctx: &mut Context) -> Self {
         // Load/create resources such as images here.
         let (width, height) = graphics::drawable_size(_ctx);
         let mut player = Player::default();
         player.transform.position = Vec2::new(width / 2.0, height / 2.0);
 
-        let mut enemies:Vec<Mobile> = vec![Mobile::default();N_ENEMY];
+        let mut enemies:Vec<Enemy> = vec![Enemy::default();N_ENEMY];
 
         for i in 0..N_ENEMY {
             let rotation_rand:f32 = rand::random();
@@ -151,11 +207,12 @@ impl MyGame {
             enemies[i].velocity = Vec2::new(rotation.cos() * 10.0, rotation.sin() * 10.0);
         }
 
-        Self {
+        Game {
             player:player,
             shots:Vec::new(),
             enemies:enemies,
-            resources:Resources::new(_ctx)
+            resources:Resources::new(_ctx),
+            size:Vec2::new(width, height)
         }
     }
 
@@ -169,7 +226,7 @@ impl MyGame {
     }
 }
 
-impl EventHandler<ggez::GameError> for MyGame {
+impl EventHandler<ggez::GameError> for Game {
     fn update(&mut self, _ctx: &mut Context) -> GameResult<()> {
         // Update code here...
         self.player.do_action(&*_ctx);
@@ -179,7 +236,7 @@ impl EventHandler<ggez::GameError> for MyGame {
         }
 
         for i in 0..self.enemies.len() {
-            self.enemies[i].do_action();
+            self.enemies[i].do_action(&self.size);
         }
 
         Ok(())
@@ -187,16 +244,16 @@ impl EventHandler<ggez::GameError> for MyGame {
 
     fn draw(&mut self, ctx: &mut Context) -> GameResult<()> {
         graphics::clear(ctx, Color::WHITE);
-        graphics::draw(ctx, &self.resources.player, self.player.get_draw_params())?;
         
-        for i in 0..self.shots.len() {
-            graphics::draw(ctx, &self.resources.shot, self.shots[i].get_draw_params())?;
-        }
-
         for i in 0..self.enemies.len() {
             graphics::draw(ctx, &self.resources.enemy, self.enemies[i].get_draw_params())?;
         }
 
+        for i in 0..self.shots.len() {
+            graphics::draw(ctx, &self.resources.shot, self.shots[i].get_draw_params())?;
+        }
+
+        graphics::draw(ctx, &self.resources.player, self.player.get_draw_params())?;
         graphics::present(ctx)
     }
 
